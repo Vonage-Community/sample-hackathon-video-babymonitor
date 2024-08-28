@@ -20,7 +20,6 @@ let stats = {
   networkLocation: null, // TODO get location from network api
   browserLocation: null,
   temperature: null,
-  talkToBaby: false,
 };
 
 const vonageVideo = new Video({
@@ -49,7 +48,10 @@ app.get('/', async (req, res) => {
 app.get('/start-session', catchAsync(async (req, res) => {
   log('Session', req.body);
   if (session === null ) {
-    session = await vonageVideo.createSession();
+    session = await vonageVideo.createSession({
+      e2ee: true,
+    });
+    log('Session', session);
   }
 
   const response = {

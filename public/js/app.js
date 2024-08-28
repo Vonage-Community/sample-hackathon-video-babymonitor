@@ -1,7 +1,7 @@
 const pixelDiffThreshold = 32;
 const scoreThreshold = 160;
 const motionDelay = 1000;
-const noiseDelay = 500;
+const noiseDelay = 2000;
 
 const noiseMinThreshold = 80;
 const noiseMaxThreshold = 20;
@@ -11,6 +11,7 @@ const alertSound = new Audio(soundFile);
 
 let publisher;
 let alertTimer;
+let session;
 
 //create canvas to display processed motion image
 const motionCanvas = document.getElementById('motion');
@@ -39,10 +40,24 @@ const handleError = (error) => {
   }
 }
 
+const notifySet = new Set();
+
+const removeFromSet = (message) => {
+}
+
 const notify = (message) => {
-  console.log('Notifying', message);
+  if (notifySet.has(message)) {
+    return;
+  }
+
+  notifySet.add(message);
   toastElement.querySelector('.toast-body').innerText = message;
   toaster.show();
+  const cleanMessage = () => {
+    notifySet.delete(message);
+    toastElement.removeEventListener('hidden.bs.toast', cleanMessage);
+  }
+  toastElement.addEventListener('hidden.bs.toast', cleanMessage);
   alertSound.play();
 }
 
@@ -52,8 +67,8 @@ const addQueryParam = (key, value) => {
   window.history.pushState({}, '', url);
 }
 
-const initializeSession = ({applicationId, sessionId, token}) => {
-  const session = OT.initSession(applicationId, sessionId);
+const initializeSession = ({ applicationId, sessionId, token }) => {
+  session = OT.initSession(applicationId, sessionId);
 
   // Subscribe to a newly created stream
   session.on('streamCreated', (event) => {
@@ -66,7 +81,7 @@ const initializeSession = ({applicationId, sessionId, token}) => {
         insertMode: 'append',
         width: '100%',
         height: '100%',
-        name: getMode(),
+        name: getMode() === 'monitor' ? 'baby' : 'parent',
       },
       handleError,
     );
@@ -78,8 +93,7 @@ const initializeSession = ({applicationId, sessionId, token}) => {
       return;
     }
 
-    let alertTimer;
-    let lastNoiseLevel = 0;
+    let noiseAlertTimer;
     let tooLoud = false;
     subscriber.on('audioLevelUpdated', function(event) {
       if (movingAvg === null || movingAvg <= event.audioLevel) {
@@ -98,20 +112,25 @@ const initializeSession = ({applicationId, sessionId, token}) => {
         tooLoud = true;
       }
 
-      if (alertTimer && ordLevel < noiseMaxThreshold) {
-        clearTimeout(alertTimer);
+      if (noiseAlertTimer && ordLevel < noiseMaxThreshold) {
+        clearTimeout(noiseAlertTimer);
         alertTimer = null;
       }
 
-      if (!tooLoud && alertTimer) {
+      if (!tooLoud && noiseAlertTimer) {
         return;
       }
 
-      alertTimer = setTimeout(() => {
+      noiseAlertTimer = setTimeout(() => {
         notify('Noise detected');
       }, noiseDelay);
     });
   });
+
+  session.on('signal:talkToBaby', (event) => {
+    console.log('Received signal', event);
+    toggleBaby(event.data);
+  })
 
   session.on('sessionDisconnected', (event) => {
     console.log('You were disconnected from the session.', event.reason);
@@ -124,7 +143,7 @@ const initializeSession = ({applicationId, sessionId, token}) => {
       insertMode: 'append',
       width: '100%',
       height: '100%',
-      name: getMode(),
+      name: getMode() === 'monitor' ? 'baby' : 'parent',
     },
     handleError,
   );
@@ -312,7 +331,7 @@ const postStats = async (stats) => {
     },
     body: JSON.stringify({
       method: 'setBabyStatus',
-      parameters:{
+      parameters: {
         ...stats,
       }
     }),
@@ -328,18 +347,40 @@ const startBaby = async () => {
   const stats = await collectLocalStats();
   await postStats(stats, 'monitor');
 
-  setInterval(async () => {
-    console.log('Checking baby stats');
-    const serverStats = await getStats();
-    console.log('Stats', serverStats);
+  //  setInterval(async () => {
+  //    console.log('Checking baby stats');
+  //    const serverStats = await getStats();
+  //    console.log('Stats', serverStats);
+  //
+  //    parentCamElement.classList.add('d-none');
+  //
+  //    if (serverStats.talkToBaby) {
+  //      console.log('Talk to baby');
+  //      parentCamElement.classList.remove('d-none');
+  //    }
+  //  }, 1000);
+}
 
-    parentCamElement.classList.add('d-none');
+const toggleBaby = (action) => {
+  if (action) {
+    console.log('Starting talk to baby baby');
+    parentCamElement.classList.remove('d-none');
+    return;
+  }
 
-    if (serverStats.talkToBaby) {
-      console.log('Talk to baby');
-      parentCamElement.classList.remove('d-none');
-    }
-  }, 1000);
+  console.log('Stopping talk to baby baby');
+  parentCamElement.classList.add('d-none');
+}
+
+const talkToBaby = (action) => {
+  console.log('Talk to baby');
+  document.getElementById('talk-to-baby').disabled = action;
+  document.getElementById('dont-talk-to-baby').disabled = !action;
+  session.signal({
+    type: 'talkToBaby',
+    data: action,
+  });
+  togglePublisher(action);
 }
 
 const handelClickEvent = (event) => {
@@ -366,21 +407,12 @@ const handelClickEvent = (event) => {
   }
 
   if (target.classList.contains('talk-to-baby')) {
-    console.log('Talk to baby');
-    document.getElementById('talk-to-baby').disabled = true;
-    document.getElementById('dont-talk-to-baby').disabled = false;
-    postStats({talkToBaby: true});
-
-    togglePublisher(true);
+    talkToBaby(true);
     return;
   }
 
   if (target.classList.contains('dont-talk-to-baby')) {
-    console.log('Dont Talk to baby');
-    document.getElementById('talk-to-baby').disabled = false;
-    document.getElementById('dont-talk-to-baby').disabled = true;
-    postStats({talkToBaby: false});
-    togglePublisher(false);
+    talkToBaby(false);
     return;
   }
 };
@@ -401,7 +433,7 @@ const getMode = () => {
   return mode;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('Starting Vonage Video API session');
 
   const serverBase = location.origin;
@@ -409,19 +441,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('click', handelClickEvent);
 
-  fetch(`${serverBase}/start-session`)
-  .then((response) => response.json())
-  .then(initializeSession).catch((error) => {
-    handleError(error);
-    alert('Failed to get Vonage Video sessionId and token');
-  });
+  const config = await fetch(`${serverBase}/start-session`)
+    .then((response) => response.json())
+    .catch((error) => {
+      handleError(error);
+      alert('Failed to get Vonage Video sessionId and token');
+    });
 
-  switch(getMode()) {
+  switch (getMode()) {
     case 'monitor':
+      initializeSession(config)
       startMonitor();
       break;
 
     case 'baby':
+      initializeSession(config)
       startBaby();
       break;
   }

@@ -11,7 +11,7 @@
 2. CD into the directory `cd sample-hackathon-video-babymonitor`
 3. run `npm install`
 4. Login to your [Vonage Developer Dashboard](https://dashboard.nexmo.com)
-5. Create a new application with video capabilities (The webhooks are not needed, but use the ngrok domain created in step )
+5. Create a new application with video capabilities (The webhooks are not needed )
 6. Download the private key and copy it into the project folder (same folder as step 2)
 7. Copy `.env-example` to `.env`
 8. Edit `.env` and add the application ID (from Step 5) and the full path to the private key
