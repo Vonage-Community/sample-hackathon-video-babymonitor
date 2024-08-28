@@ -1,0 +1,9 @@
+body, html {
+  height: 100vh;
+  color: white;
+  background: linear-gradient(90deg,#6328ab 4.86%,#ffa58b 96.11%);
+}
+
+.parent-cam, .baby-cam{
+  height: 75vh
+}
