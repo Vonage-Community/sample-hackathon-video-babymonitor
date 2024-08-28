@@ -43,7 +43,7 @@ const notify = (message) => {
   console.log('Notifying', message);
   toastElement.querySelector('.toast-body').innerText = message;
   toaster.show();
-//  alertSound.play();
+  alertSound.play();
 }
 
 const addQueryParam = (key, value) => {
