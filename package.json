@@ -24,6 +24,6 @@
     "dotenv": "16.4.5",
     "eslint": "9.9.1",
     "eslint-plugin-n": "17.10.2",
-    "express": "4.19.2"
+    "express": "5.0.0"
   }
 }
